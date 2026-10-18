@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f4f3ef">
+<title>转文 · 文本与数据清洗（数据不上传）</title>
+<meta name="description" content="规则链式文本清洗与 CSV / JSON / Markdown 表格互转，纯前端，数据不离开本机。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23222a26'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='%23f4f3ef' font-family='sans-serif' font-weight='700'%3E转%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="mark">转</span><div class="bt"><b>转文</b><small>文本与数据清洗 · 数据不离开本机</small></div></div>
+  <nav class="tabs" role="tablist" aria-label="功能">
+    <button role="tab" class="tab on" data-tab="clean" aria-selected="true">清洗</button>
+    <button role="tab" class="tab" data-tab="convert" aria-selected="false">表格互转</button>
+    <button role="tab" class="tab" data-tab="batch" aria-selected="false">批量<i class="badge">Pro</i></button>
+  </nav>
+  <button id="proBtn" class="btn pro" type="button">Pro 解锁</button>
+</header>
+
+<main>
+<!-- 清洗 -->
+<section id="pane-clean" class="pane on">
+  <div class="layout">
+    <aside class="card rules" style="grid-area:rules">
+      <div class="card-h"><h2>规则链</h2><span class="hint">勾选启用，自上而下依次执行</span></div>
+      <div id="presets" class="chips" aria-label="内置组合"></div>
+      <div class="save-row">
+        <input id="chainName" type="text" maxlength="20" placeholder="给当前规则链起个名字" aria-label="规则链名称">
+        <button id="saveChain" class="btn sm" type="button">保存</button>
+      </div>
+      <div class="slots"><span id="slotInfo"></span>
+        <span class="slot-actions"><button id="expChain" class="link" type="button">导出</button><button id="impChain" class="link" type="button">导入</button></span>
+      </div>
+      <div id="saved" class="saved"></div>
+      <div id="ruleList" class="rule-list"></div>
+      <input id="impFile" type="file" accept=".json,application/json" hidden>
+    </aside>
+
+    <section class="card pane-io" style="grid-area:in">
+      <div class="card-h">
+        <h2>输入</h2>
+        <div class="tools">
+          <button class="link" id="btnSample" type="button">示例</button>
+          <button class="link" id="btnPaste" type="button">粘贴</button>
+          <button class="link" id="btnOpen" type="button">打开文件</button>
+          <button class="link" id="btnClear" type="button">清空</button>
+        </div>
+      </div>
+      <textarea id="in" spellcheck="false" placeholder="把要处理的文字贴在这里。数据只在本页内存中处理，不会上传。"></textarea>
+      <div class="foot"><span id="inStat"></span></div>
+      <input id="openFile" type="file" accept=".txt,.csv,.tsv,.md,.json,.log,text/*" hidden>
+    </section>
+
+    <section class="card pane-io" style="grid-area:out">
+      <div class="card-h">
+        <div class="seg" role="tablist"><button class="on" data-view="out" type="button">结果</button><button data-view="diff" type="button">差异</button></div>
+        <div class="tools">
+          <button class="link" id="btnReuse" type="button">用作输入</button>
+          <button class="link" id="btnDl" type="button">下载</button>
+          <button class="btn sm primary" id="btnCopy" type="button">复制结果</button>
+        </div>
+      </div>
+      <textarea id="out" readonly spellcheck="false" placeholder="处理结果会实时出现在这里"></textarea>
+      <div id="diff" class="diff" hidden></div>
+      <div class="foot"><span id="outStat"></span><span id="errStat" class="err"></span></div>
+    </section>
+  </div>
+</section>
+
+<!-- 互转 -->
+<section id="pane-convert" class="pane">
+  <div class="card opts">
+    <label>输入格式<select id="cvIn"><option value="auto">自动识别</option><option value="csv">CSV</option><option value="tsv">TSV / 表格粘贴</option><option value="json">JSON</option><option value="md">Markdown 表格</option></select></label>
+    <button id="cvSwap" class="btn sm" type="button" title="把结果放回输入，并对调格式">⇄ 互换</button>
+    <label>输出格式<select id="cvOut"><option value="json">JSON（对象数组）</option><option value="jsonarr">JSON（二维数组）</option><option value="csv">CSV</option><option value="tsv">TSV</option><option value="md">Markdown 表格</option></select></label>
+    <label class="ck"><input type="checkbox" id="cvHead" checked>首行是表头</label>
+    <label class="ck"><input type="checkbox" id="cvInfer" checked>识别数字/布尔</label>
+    <label>CSV 分隔符<select id="cvDelim"><option value="auto">自动</option><option value=",">逗号 ,</option><option value=";">分号 ;</option><option value="|">竖线 |</option></select></label>
+  </div>
+  <div class="layout two">
+    <section class="card pane-io">
+      <div class="card-h"><h2>输入</h2><div class="tools"><button class="link" id="cvSample" type="button">示例</button><button class="link" id="cvPaste" type="button">粘贴</button><button class="link" id="cvClear" type="button">清空</button></div></div>
+      <textarea id="cvText" spellcheck="false" placeholder="贴入 CSV、JSON 或 Markdown 表格，也可以直接从 Excel / 表格软件复制粘贴"></textarea>
+      <div class="foot"><span id="cvInStat"></span></div>
+    </section>
+    <section class="card pane-io">
+      <div class="card-h">
+        <div class="seg"><button class="on" data-cv="out" type="button">结果</button><button data-cv="table" type="button">表格预览</button></div>
+        <div class="tools"><button class="link" id="cvDl" type="button">下载</button><button class="btn sm primary" id="cvCopy" type="button">复制结果</button></div>
+      </div>
+      <textarea id="cvOutText" readonly spellcheck="false" placeholder="转换结果"></textarea>
+      <div id="cvTable" class="tbl" hidden></div>
+      <div class="foot"><span id="cvOutStat"></span><span id="cvErr" class="err"></span></div>
+    </section>
+  </div>
+</section>
+
+<!-- 批量 -->
+<section id="pane-batch" class="pane">
+  <div class="card batch">
+    <div class="card-h"><h2>批量处理多个文件</h2><span class="hint">使用“清洗”页当前的规则链</span></div>
+    <div id="batchLock" class="lock" hidden>
+      <p>批量功能属于 Pro：一次拖入多个 .txt / .csv / .md / .json 文件，按当前规则链统一处理，逐个下载。</p>
+      <button class="btn primary" type="button" data-open-pro>查看 Pro</button>
+    </div>
+    <div id="batchBody" hidden>
+      <label class="drop" id="drop"><input id="batchFiles" type="file" multiple accept=".txt,.csv,.tsv,.md,.json,.log,text/*" hidden><span>点击选择或拖入多个文件</span><small>文件只在本机读取，不上传</small></label>
+      <div class="tools right"><button class="btn sm" id="batchAll" type="button">全部下载</button><button class="link" id="batchClear" type="button">清空列表</button></div>
+      <div id="batchList" class="blist"></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="mbar"><span id="mStat"></span><button class="btn primary" id="mCopy" type="button">复制结果</button></div>
+
+<dialog id="proDlg">
+  <form method="dialog" class="dlg">
+    <button class="x" value="close" aria-label="关闭">×</button>
+    <h2>转文 Pro</h2>
+    <p class="lead">免费版已经能完成日常清洗；Pro 解决“规则要反复用、要换设备、要处理一堆文件”。</p>
+    <table class="cmp">
+      <tr><th></th><th>免费</th><th>Pro</th></tr>
+      <tr><td>全部清洗规则 / 表格互转 / 差异 / 复制</td><td>✓</td><td>✓</td></tr>
+      <tr><td>保存规则链</td><td>最多 3 条</td><td>不限</td></tr>
+      <tr><td>文本上限</td><td>100 万字符</td><td>2000 万字符</td></tr>
+      <tr><td>导入 / 导出规则链</td><td>—</td><td>✓</td></tr>
+      <tr><td>批量多文件处理</td><td>—</td><td>✓</td></tr>
+    </table>
+    <div id="licState" class="lic-state"></div>
+    <label class="lic">授权码<input id="licKey" type="text" placeholder="ZW-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false"></label>
+    <div id="licMsg" class="lic-msg" role="status"></div>
+    <div class="row">
+      <button type="button" class="btn primary" id="licOk">激活</button>
+      <button type="button" class="btn" id="licOff">移除授权</button>
+      <button type="button" class="btn" disabled title="收款渠道尚未接入">获取授权码（暂未开放）</button>
+    </div>
+    <p class="note">授权码仅在本机校验，不联网。当前校验为占位实现，收款与正式签名校验接入前，不代表真实授权。</p>
+  </form>
+</dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
