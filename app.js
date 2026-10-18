@@ -3,7 +3,6 @@
 'use strict';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const FREE_LIMIT = 1e6, PRO_LIMIT = 2e7, FREE_CHAINS = 3;
 const CJK = '\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff';
 const RE_CJK = new RegExp('[' + CJK + ']');
 const RE_CJKP = new RegExp('[' + CJK + '，。、；：？！（）“”‘’《》【】…]');
@@ -350,26 +349,15 @@ function convert(text, inFmt, outFmt, o) {
   return { text: stringify(t, outFmt, o), table: t };
 }
 
-/* ---------- 授权（占位，不接收款，不含任何真实密钥） ---------- */
-function lhash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
-function sig(body) { return lhash('zw-placeholder:' + body).toString(36).toUpperCase().padStart(4, '0').slice(-4); }
-function validKey(k) {
-  const m = /^ZW-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})-([A-Z0-9]{4})$/.exec(String(k || '').trim().toUpperCase());
-  return !!m && sig(m[1] + '-' + m[2] + '-' + m[3]) === m[4];
-}
-/* 正式版应替换为“服务端私钥签名 + 前端公钥验签”，此处仅为占位演示 */
-const devKey = (a, b, c) => { const body = [a, b, c].join('-'); return 'ZW-' + body + '-' + sig(body); };
-
 /* ---------- 存储 ---------- */
 const store = {
   get(k, d) { try { const v = localStorage.getItem('zw.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('zw.' + k, JSON.stringify(v)); } catch (e) { /* 隐私模式 */ } },
   del(k) { try { localStorage.removeItem('zw.' + k); } catch (e) {} },
 };
-const isPro = () => validKey(store.get('license', ''));
-const textLimit = () => (isPro() ? PRO_LIMIT : FREE_LIMIT);
+store.del('license'); // 清理旧版本遗留的本地数据
 
-const ZW = { RULES, runChain, defaultSteps, stepsFromPreset, PRESETS, diffLines, parseTable, convert, parseDelimited, validKey, devKey, FREE_LIMIT, FREE_CHAINS, sanitizeSteps };
+const ZW = { RULES, runChain, defaultSteps, stepsFromPreset, PRESETS, diffLines, parseTable, convert, parseDelimited, sanitizeSteps };
 window.ZW = ZW;
 if (typeof document === 'undefined' || !document.getElementById('ruleList')) return;
 
@@ -420,13 +408,8 @@ function saveSteps() { store.set('steps', steps); }
 let timer;
 function schedule() { clearTimeout(timer); timer = setTimeout(run, 120); }
 function run() {
-  const text = $('#in').value, lim = textLimit();
-  $('#inStat').textContent = fmtN(text.length) + ' 字符 · ' + fmtN(lines(text).length) + ' 行' + (text.length > lim * 0.9 ? '（上限 ' + fmtN(lim) + '）' : '');
-  if (text.length > lim) {
-    lastOut = ''; lastRun = null; $('#out').value = '';
-    $('#errStat').textContent = '超出' + (isPro() ? '' : '免费版') + '上限 ' + fmtN(lim) + ' 字符';
-    $('#outStat').textContent = ''; $('#diff').innerHTML = ''; paintInfo(); return;
-  }
+  const text = $('#in').value;
+  $('#inStat').textContent = fmtN(text.length) + ' 字符 · ' + fmtN(lines(text).length) + ' 行';
   lastRun = runChain(text, steps); lastOut = lastRun.out;
   $('#out').value = lastOut;
   const on = steps.filter(s => s.on).length;
@@ -449,25 +432,12 @@ function setView(v) {
   if (v === 'diff') paintDiff(); else run();
 }
 function renderChains() {
-  const pro = isPro();
-  $('#slotInfo').textContent = pro ? '已保存 ' + chains.length + ' 条 · Pro 不限' : '已保存 ' + chains.length + ' / ' + FREE_CHAINS + ' 条';
+  $('#slotInfo').textContent = '已保存 ' + chains.length + ' 条';
   $('#saved').innerHTML = chains.length ? chains.map((c, i) => '<div class="sv" data-i="' + i + '"><button class="ap" type="button" title="应用这条规则链">' + esc(c.name) + '<small>' + c.steps.filter(s => s.on).length + ' 步</small></button><button class="rm" type="button" aria-label="删除 ' + esc(c.name) + '">×</button></div>').join('') : '<div class="none">还没有保存的规则链</div>';
-  $$('#expChain,#impChain').forEach(b => b.classList.toggle('locked', !pro));
 }
 function renderPresets() {
   $('#presets').innerHTML = PRESETS.map((p, i) => '<button type="button" class="chip" data-i="' + i + '">' + p.name + '</button>').join('') + '<button type="button" class="chip ghost" id="resetRules">全部关闭</button>';
 }
-function openPro() { refreshLic(); $('#proDlg').showModal(); }
-function refreshLic() {
-  const pro = isPro();
-  $('#licState').textContent = pro ? '已激活 Pro（本机校验通过）' : '当前为免费版';
-  $('#licState').classList.toggle('ok', pro);
-  $('#proBtn').textContent = pro ? 'Pro ✓' : 'Pro 解锁';
-  $('#proBtn').classList.toggle('active', pro);
-  $('#batchLock').hidden = pro; $('#batchBody').hidden = !pro;
-  renderChains(); run();
-}
-
 /* 事件 */
 $('#in').addEventListener('input', schedule);
 $('#ruleList').addEventListener('click', e => {
@@ -502,7 +472,6 @@ $('#saveChain').addEventListener('click', () => {
   const i = chains.findIndex(c => c.name === name), snap = JSON.parse(JSON.stringify(steps));
   if (i >= 0) { chains[i].steps = snap; toast('已更新「' + name + '」'); }
   else {
-    if (!isPro() && chains.length >= FREE_CHAINS) { toast('免费版最多保存 ' + FREE_CHAINS + ' 条'); openPro(); return; }
     chains.push({ name, steps: snap }); toast('已保存「' + name + '」');
   }
   store.set('chains', chains); renderChains();
@@ -514,11 +483,10 @@ $('#saved').addEventListener('click', e => {
   else if (e.target.closest('.ap')) { steps = sanitizeSteps(JSON.parse(JSON.stringify(chains[i].steps))); $('#chainName').value = chains[i].name; saveSteps(); renderRules(); run(); }
 });
 $('#expChain').addEventListener('click', () => {
-  if (!isPro()) return openPro();
   if (!chains.length) return toast('还没有可导出的规则链');
   dl('zhuanwen-chains.json', JSON.stringify({ app: 'zhuanwen', v: 1, chains }, null, 2), 'application/json');
 });
-$('#impChain').addEventListener('click', () => { if (!isPro()) return openPro(); $('#impFile').click(); });
+$('#impChain').addEventListener('click', () => $('#impFile').click());
 $('#impFile').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try {
@@ -529,7 +497,7 @@ $('#impFile').addEventListener('change', async e => {
   } catch (x) { toast('不是有效的规则链文件'); }
 });
 $('#btnSample').addEventListener('click', () => {
-  $('#in').value = '  张三,电话 138-1234-5678 ，邮箱 zhangsan@example.com  \n\n李四 ，手机：１３９００００１１１１,Email: Li.Si@Example.org\n\n   张三,电话 138-1234-5678 ，邮箱 zhangsan@example.com\n官网 https://example.com/pro?a=1。备用 www.demo.cn.\n订单共有3笔,总价100元,请于2026年10月18日前确认(逾期作废)...\n';
+  $('#in').value = '  张三,电话 138-1234-5678 ，邮箱 zhangsan@example.com  \n\n李四 ，手机：１３９００００１１１１,Email: Li.Si@Example.org\n\n   张三,电话 138-1234-5678 ，邮箱 zhangsan@example.com\n官网 https://example.com/item?a=1。备用 www.demo.cn.\n订单共有3笔,总价100元,请于2026年10月18日前确认(逾期作废)...\n';
   run();
 });
 $('#btnPaste').addEventListener('click', async () => { try { $('#in').value = await navigator.clipboard.readText(); run(); } catch (e) { toast('浏览器不允许读取剪贴板，请长按输入框粘贴'); $('#in').focus(); } });
@@ -556,11 +524,10 @@ document.body.dataset.tab = 'clean';
 let cvView = 'out';
 const cvOpts = () => ({ head: $('#cvHead').checked, infer: $('#cvInfer').checked, delim: $('#cvDelim').value });
 function cvRun() {
-  const text = $('#cvText').value, lim = textLimit();
+  const text = $('#cvText').value;
   $('#cvInStat').textContent = fmtN(text.length) + ' 字符';
   $('#cvErr').textContent = ''; $('#cvOutStat').textContent = '';
   if (!text.trim()) { $('#cvOutText').value = ''; $('#cvTable').innerHTML = ''; return; }
-  if (text.length > lim) { $('#cvErr').textContent = '超出上限 ' + fmtN(lim) + ' 字符'; return; }
   try {
     const r = convert(text, $('#cvIn').value, $('#cvOut').value, cvOpts());
     $('#cvOutText').value = r.text;
@@ -591,10 +558,8 @@ function lastCv() { try { return parseTable($('#cvText').value, 'auto', cvOpts()
 /* 批量 */
 function bname(n) { const i = n.lastIndexOf('.'); return i > 0 ? n.slice(0, i) + '.cleaned' + n.slice(i) : n + '.cleaned.txt'; }
 async function addFiles(fl) {
-  if (!isPro()) return openPro();
   for (const f of fl) {
     const text = await f.text();
-    if (text.length > PRO_LIMIT) { batch.push({ name: f.name, err: '文件过大' }); continue; }
     const r = runChain(text, steps);
     batch.push({ name: f.name, out: r.out, a: lines(text).length, b: r.out === '' ? 0 : lines(r.out).length, size: text.length, err: r.info.find(x => x.err)?.err });
   }
@@ -611,18 +576,5 @@ const drop = $('#drop');
 ['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => addFiles([...e.dataTransfer.files]));
-$$('[data-open-pro]').forEach(b => b.addEventListener('click', openPro));
-
-/* Pro 弹窗 */
-$('#proBtn').addEventListener('click', openPro);
-$('#licOk').addEventListener('click', () => {
-  const k = $('#licKey').value.trim().toUpperCase();
-  if (validKey(k)) { store.set('license', k); $('#licMsg').textContent = '已激活。'; $('#licMsg').className = 'lic-msg ok'; }
-  else { $('#licMsg').textContent = '授权码无效，请检查格式：ZW-XXXX-XXXX-XXXX-XXXX'; $('#licMsg').className = 'lic-msg bad'; }
-  refreshLic();
-});
-$('#licOff').addEventListener('click', () => { store.del('license'); $('#licKey').value = ''; $('#licMsg').textContent = '已移除授权。'; $('#licMsg').className = 'lic-msg'; refreshLic(); });
-$('#proDlg').addEventListener('click', e => { if (e.target === $('#proDlg')) $('#proDlg').close(); });
-
-renderPresets(); renderRules(); renderChains(); renderBatch(); refreshLic();
+renderPresets(); renderRules(); renderChains(); renderBatch(); run();
 })();

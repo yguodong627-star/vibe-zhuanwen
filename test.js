@@ -98,59 +98,50 @@ const eq = (name, got, want) => { const ok = JSON.stringify(got) === JSON.string
   await pg.click('#presets .chip[data-i="2"]');
   await new Promise(r => setTimeout(r, 300));
   eq('UI 预设-提取邮箱', await pg.$eval('#out', e => e.value), 'li.si@example.org'.replace('li.si', 'Li.Si').split('\n').length && 'Li.Si@Example.org\nzhangsan@example.com');
-  // 保存规则链 3 条上限
+  // 保存规则链：不限数量（原免费版最多 3 条）
   const save = async n => { await pg.$eval('#chainName', e => e.value = ''); await pg.type('#chainName', n); await pg.click('#saveChain'); };
-  await save('甲'); await save('乙'); await save('丙');
-  eq('免费保存3条', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).length), 3);
-  await save('丁');
-  eq('第4条被拦并弹出Pro', [await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).length), await pg.$eval('#proDlg', e => e.open)], [3, true]);
-  await pg.evaluate(() => document.getElementById('proDlg').close());
+  for (const n of ['甲', '乙', '丙', '丁', '戊']) await save(n);
+  eq('规则链保存 5 条（无 3 条上限）', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).length), 5);
+  eq('无 Pro 弹窗元素', await pg.$('#proDlg'), null);
   await save('甲');
-  eq('同名覆盖不占名额', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).length), 3);
-  eq('免费导出被拦', (await pg.click('#expChain'), await pg.$eval('#proDlg', e => e.open)), true);
-  await pg.evaluate(() => document.getElementById('proDlg').close());
+  eq('同名覆盖不增加条数', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).length), 5);
+  eq('保存名额文案不含上限', await pg.$eval('#slotInfo', e => e.textContent), '已保存 5 条');
+  // 导出规则链：可直接使用
+  await pg.evaluate(() => { window.__dl = []; const o = URL.createObjectURL; URL.createObjectURL = b => { window.__dl.push(b.size); return o.call(URL, b); }; });
+  await pg.click('#expChain'); await new Promise(r => setTimeout(r, 300));
+  eq('导出规则链直接生效', (await pg.evaluate(() => window.__dl)).length >= 1, true);
   // 应用规则链
   await pg.click('#presets .chip[data-i="0"]');
   await pg.click('#saved .sv[data-i="1"] .ap');
   eq('应用规则链恢复步骤', await pg.evaluate(() => JSON.parse(localStorage['zw.steps']).filter(s => s.on).map(s => s.id)), ['extract', 'sort']);
   await pg.click('#saved .sv[data-i="2"] .rm');
-  eq('删除规则链', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).length), 2);
-  // 批量未授权
-  await pg.click('[data-tab=batch]');
-  eq('批量-免费显示锁', [await pg.$eval('#batchLock', e => !e.hidden), await pg.$eval('#batchBody', e => e.hidden)], [true, true]);
-  // 无效 key / 有效 key
-  await pg.click('#proBtn');
-  await pg.type('#licKey', 'ZW-AAAA-BBBB-CCCC-DDDD'); await pg.click('#licOk');
-  eq('无效授权码', await pg.evaluate(() => ZW.validKey('ZW-AAAA-BBBB-CCCC-DDDD')), false);
-  const key = await pg.evaluate(() => ZW.devKey('TEST', 'DEMO', '0001'));
-  await pg.$eval('#licKey', e => e.value = ''); await pg.type('#licKey', key.toLowerCase()); await pg.click('#licOk');
-  eq('有效授权码激活', [await pg.$eval('#proBtn', e => e.textContent), await pg.$eval('#licMsg', e => e.textContent)], ['Pro ✓', '已激活。']);
-  await pg.evaluate(() => document.getElementById('proDlg').close());
-  await pg.click('[data-tab=clean]');
-  await save('丁'); await save('戊');
-  eq('Pro 无限保存', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).length), 4);
-  // 导入导出
+  eq('删除规则链', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).length), 4);
+  // 导入规则链：可直接使用
   const exported = await pg.evaluate(() => JSON.stringify({ app: 'zhuanwen', v: 1, chains: JSON.parse(localStorage['zw.chains']).slice(0, 1).map(c => ({ name: '导入的', steps: c.steps })) }));
   require('fs').writeFileSync('/tmp/zw-import.json', exported);
   const [fc] = await Promise.all([pg.waitForFileChooser(), pg.click('#impChain')]);
   await fc.accept(['/tmp/zw-import.json']);
   await new Promise(r => setTimeout(r, 300));
-  eq('Pro 导入规则链', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).some(c => c.name === '导入的')), true);
-  // 批量
+  eq('导入规则链直接生效', await pg.evaluate(() => JSON.parse(localStorage['zw.chains']).some(c => c.name === '导入的')), true);
+  // 批量：直接可用，无锁
   await pg.click('#presets .chip[data-i="0"]');
   require('fs').writeFileSync('/tmp/zw-a.txt', ' x \n\nx\ny\n'); require('fs').writeFileSync('/tmp/zw-b.csv', 'a, b\n\n a, b\n');
   await pg.click('[data-tab=batch]');
+  eq('批量页无锁定提示且可操作', [await pg.$('#batchLock'), await pg.$eval('#batchBody', e => e.hidden)], [null, false]);
   const inp = await pg.$('#batchFiles'); await inp.uploadFile('/tmp/zw-a.txt', '/tmp/zw-b.csv');
   await new Promise(r => setTimeout(r, 500));
   eq('批量-2个文件处理', (await pg.$$eval('#batchList .bi', e => e.map(x => x.querySelector('small').textContent))).map(s => s.replace(/\s/g, '')), ['9字符·5→2行', '12字符·4→1行']);
-  // 取消授权
-  await pg.click('#proBtn'); await pg.click('#licOff'); await pg.evaluate(() => document.getElementById('proDlg').close());
-  eq('移除授权后回到免费', await pg.$eval('#proBtn', e => e.textContent), 'Pro 解锁');
-  // 超限
+  // 文本长度无上限（原免费版 100 万字符）：300 万字符
   await pg.click('[data-tab=clean]');
-  await pg.$eval('#in', e => { e.value = 'a'.repeat(1000001); e.dispatchEvent(new Event('input')); });
-  await new Promise(r => setTimeout(r, 400));
-  eq('免费超限提示', /超出免费版上限/.test(await pg.$eval('#errStat', e => e.textContent)), true);
+  await pg.click('#presets .chip[data-i="0"]');
+  await pg.$eval('#in', e => { e.value = ('abc def\n').repeat(400000); e.dispatchEvent(new Event('input')); });
+  await new Promise(r => setTimeout(r, 1500));
+  eq('超长文本（320 万字符）正常处理、无上限报错', [await pg.$eval('#errStat', e => e.textContent), (await pg.$eval('#inStat', e => e.textContent)).includes('3,200,000') || (await pg.$eval('#inStat', e => e.textContent)).includes('3200000') || (await pg.$eval('#inStat', e => e.textContent)).includes('320')], ['', true]);
+  // 页面不含付费相关文案
+  const all = await pg.evaluate(() => document.documentElement.outerHTML);
+  eq('页面不含 Pro/授权码/付费/解锁/升级', /Pro\b|授权码|付费|收费|解锁|升级|上限/.test(all), false);
+  eq('页面标明完全免费', all.includes('完全免费'), true);
+  eq('不再保存授权数据', await pg.evaluate(() => localStorage.getItem('zw.license')), null);
   // 互转 UI
   await pg.click('[data-tab=convert]'); await pg.click('#cvSample');
   await pg.select('#cvOut', 'md');

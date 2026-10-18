@@ -7,7 +7,7 @@ const sample=async pg=>{await pg.click('#btnSample');};
 await go('desktop-clean.png',D,sample);
 await go('desktop-diff.png',D,async pg=>{await sample(pg);await pg.click('[data-view=diff]');});
 await go('desktop-convert.png',D,async pg=>{await pg.click('[data-tab=convert]');await pg.click('#cvSample');});
-await go('desktop-pro.png',D,async pg=>{await pg.click('#proBtn');});
+await go('desktop-batch.png',D,async pg=>{await pg.click('[data-tab=batch]');});
 await go('mobile-clean.png',M,sample,true);
 await go('mobile-convert.png',M,async pg=>{await pg.click('[data-tab=convert]');await pg.click('#cvSample');},true);
 await go('mobile-diff.png',M,async pg=>{await sample(pg);await pg.click('[data-view=diff]');});

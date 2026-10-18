@@ -15,9 +15,9 @@
   <nav class="tabs" role="tablist" aria-label="功能">
     <button role="tab" class="tab on" data-tab="clean" aria-selected="true">清洗</button>
     <button role="tab" class="tab" data-tab="convert" aria-selected="false">表格互转</button>
-    <button role="tab" class="tab" data-tab="batch" aria-selected="false">批量<i class="badge">Pro</i></button>
+    <button role="tab" class="tab" data-tab="batch" aria-selected="false">批量</button>
   </nav>
-  <button id="proBtn" class="btn pro" type="button">Pro 解锁</button>
+  <span class="badge-free">完全免费</span>
 </header>
 
 <main>
@@ -102,11 +102,7 @@
 <section id="pane-batch" class="pane">
   <div class="card batch">
     <div class="card-h"><h2>批量处理多个文件</h2><span class="hint">使用“清洗”页当前的规则链</span></div>
-    <div id="batchLock" class="lock" hidden>
-      <p>批量功能属于 Pro：一次拖入多个 .txt / .csv / .md / .json 文件，按当前规则链统一处理，逐个下载。</p>
-      <button class="btn primary" type="button" data-open-pro>查看 Pro</button>
-    </div>
-    <div id="batchBody" hidden>
+    <div id="batchBody">
       <label class="drop" id="drop"><input id="batchFiles" type="file" multiple accept=".txt,.csv,.tsv,.md,.json,.log,text/*" hidden><span>点击选择或拖入多个文件</span><small>文件只在本机读取，不上传</small></label>
       <div class="tools right"><button class="btn sm" id="batchAll" type="button">全部下载</button><button class="link" id="batchClear" type="button">清空列表</button></div>
       <div id="batchList" class="blist"></div>
@@ -117,30 +113,6 @@
 
 <div class="mbar"><span id="mStat"></span><button class="btn primary" id="mCopy" type="button">复制结果</button></div>
 
-<dialog id="proDlg">
-  <form method="dialog" class="dlg">
-    <button class="x" value="close" aria-label="关闭">×</button>
-    <h2>转文 Pro</h2>
-    <p class="lead">免费版已经能完成日常清洗；Pro 解决“规则要反复用、要换设备、要处理一堆文件”。</p>
-    <table class="cmp">
-      <tr><th></th><th>免费</th><th>Pro</th></tr>
-      <tr><td>全部清洗规则 / 表格互转 / 差异 / 复制</td><td>✓</td><td>✓</td></tr>
-      <tr><td>保存规则链</td><td>最多 3 条</td><td>不限</td></tr>
-      <tr><td>文本上限</td><td>100 万字符</td><td>2000 万字符</td></tr>
-      <tr><td>导入 / 导出规则链</td><td>—</td><td>✓</td></tr>
-      <tr><td>批量多文件处理</td><td>—</td><td>✓</td></tr>
-    </table>
-    <div id="licState" class="lic-state"></div>
-    <label class="lic">授权码<input id="licKey" type="text" placeholder="ZW-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false"></label>
-    <div id="licMsg" class="lic-msg" role="status"></div>
-    <div class="row">
-      <button type="button" class="btn primary" id="licOk">激活</button>
-      <button type="button" class="btn" id="licOff">移除授权</button>
-      <button type="button" class="btn" disabled title="收款渠道尚未接入">获取授权码（暂未开放）</button>
-    </div>
-    <p class="note">授权码仅在本机校验，不联网。当前校验为占位实现，收款与正式签名校验接入前，不代表真实授权。</p>
-  </form>
-</dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="app.js"></script>
 </body>
